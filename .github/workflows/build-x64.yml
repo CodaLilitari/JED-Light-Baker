@@ -11,11 +11,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+      - name: Ensure MFC is installed
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $mfc = Get-ChildItem "$vs\VC\Tools\MSVC\*\atlmfc\lib\x64\nafxcw.lib" -ErrorAction SilentlyContinue
+          if ( $mfc ) { Write-Host "MFC present: $($mfc.FullName)"; exit 0 }
+          Write-Host "Installing MFC component into $vs"
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $p = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
+            'modify', '--installPath', "`"$vs`"",
+            '--add', 'Microsoft.VisualStudio.Component.VC.ATLMFC',
+            '--quiet', '--norestart', '--nocache')
+          if ( $p.ExitCode -ne 0 -and $p.ExitCode -ne 3010 ) { throw "VS installer failed: $($p.ExitCode)" }
       - name: Build Release x64
         shell: pwsh
         run: |
-          # Hosted runners may not have the v145 toolset that the project pins.
-          msbuild "Source/Light Baker.sln" /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+          msbuild "Source/Light Baker.sln" /m /p:Configuration=Release /p:Platform=x64
       - name: Check exports
         shell: pwsh
         run: |
