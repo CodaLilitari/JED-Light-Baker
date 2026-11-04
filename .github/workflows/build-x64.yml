@@ -1,0 +1,33 @@
+name: Build x64
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build Release x64
+        shell: pwsh
+        run: |
+          # Hosted runners may not have the v145 toolset that the project pins.
+          msbuild "Source/Light Baker.sln" /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+      - name: Check exports
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse -Filter "Light Baker.dll" | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          if ( -not $dll ) { throw "x64 DLL not produced" }
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          $out = & $dumpbin.FullName /headers /exports $dll.FullName
+          $out | Select-String -Pattern 'machine \(x64\)', 'JEDPluginLoadStdCall'
+          if ( -not ($out -match 'machine \(x64\)') ) { throw "DLL is not x64" }
+          if ( -not ($out -match '\sJEDPluginLoadStdCall\s*$') ) { throw "JEDPluginLoadStdCall export missing" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: light-baker-x64
+          path: "**/x64/Release/Light Baker.dll"

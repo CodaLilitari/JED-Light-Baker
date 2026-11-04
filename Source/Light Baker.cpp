@@ -1806,7 +1806,7 @@ extern "C"
 		AFX_MANAGE_STATE(AfxGetStaticModuleState());
 		if (!g_pLightBaker)
 		{
-			CWnd* pJedWindow = CWnd::FromHandle((HWND)pJed->GetJedWindow(jw_Main));
+			CWnd* pJedWindow = CWnd::FromHandle(reinterpret_cast<HWND>(static_cast<LONG_PTR>(pJed->GetJedWindow(jw_Main))));
 			g_pLightBaker = new CLightBakerDlg(pJed, pJedWindow);
 			g_pLightBaker->Create(IDD_LIGHTBAKER_DLG, pJedWindow);
 			if(!g_pLightBaker->CreateDeviceD3D())
@@ -1827,6 +1827,9 @@ extern "C"
 		return true;
 	}
 
-	// workaround for name export, JED expects JEDPluginLoadStdCall
+	// workaround for name export, JED expects JEDPluginLoadStdCall.
+	// x64 has no stdcall decoration, so dllexport already produces the plain name.
+#if !defined(_WIN64)
 	#pragma comment(linker, "/EXPORT:JEDPluginLoadStdCall=_JEDPluginLoadStdCall@4")
+#endif
 }
